@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}{{ BRAND_NAME }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="12" width="4" height="9" rx="1" fill="currentColor"/>
+            <rect x="10" y="7" width="4" height="14" rx="1" fill="currentColor" opacity="0.75"/>
+            <rect x="17" y="3" width="4" height="18" rx="1" fill="currentColor" opacity="0.5"/>
+          </svg>
+        </span>
+        {{ BRAND_NAME }}
+      </span>
+      {% block header_action %}{% endblock %}
+    </div>
+  </header>
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <p>{{ BRAND_NAME }} &middot; processamento local, nenhum dado sai da sua máquina</p>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

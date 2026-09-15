@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — {{ filename }}{% endblock %}
+
+{% block head %}
+<script src="/static/js/chart.min.js"></script>
+{% endblock %}
+
+{% block header_action %}
+<div class="header-actions">
+  <button type="button" id="save-html-btn" class="btn-ghost">⬇ Salvar dashboard em HTML</button>
+  <a href="/" class="btn-ghost">↑ Enviar outro arquivo</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="dashboard-header">
+  <div>
+    <h1>Dashboard — {{ filename }}</h1>
+    <p class="meta">
+      {{ dashboard.row_count }} linhas · {{ dashboard.column_count }} colunas · gerado em {{ elapsed_ms }} ms
+    </p>
+  </div>
+</section>
+
+{% if dashboard.warnings %}
+  {% for w in dashboard.warnings %}
+  <div class="alert alert-warning">ℹ️ {{ w }}</div>
+  {% endfor %}
+{% endif %}
+
+{% if dashboard.interactive and dashboard.category_breakdown %}
+<div id="filter-banner" class="filter-banner" hidden>
+  <span>Filtrando por <strong id="filter-banner-value"></strong></span>
+  <button type="button" id="filter-clear">Limpar filtro ✕</button>
+</div>
+{% endif %}
+
+<section class="kpi-grid">
+  {% for kpi in dashboard.kpis %}
+  <div class="kpi-card" data-kpi="{{ kpi.key }}">
+    <span class="kpi-label">{{ kpi.label }}</span>
+    <span class="kpi-value">{{ kpi.value }}</span>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="chart-grid">
+  {% if dashboard.time_series %}
+  <div class="chart-card chart-card-wide">
+    <h2>{{ dashboard.time_series.title }}</h2>
+    <div class="chart-canvas-wrap"><canvas id="chart-timeseries"></canvas></div>
+  </div>
+  {% endif %}
+
+  {% if dashboard.category_breakdown %}
+  <div class="chart-card">
+    <h2>{{ dashboard.category_breakdown.title }}</h2>
+    {% if dashboard.interactive %}<p class="chart-hint">Clique em uma barra para filtrar o dashboard</p>{% endif %}
+    <div class="chart-canvas-wrap"><canvas id="chart-bar"></canvas></div>
+  </div>
+
+  <div class="chart-card">
+    <h2>Distribuição — {{ dashboard.category_breakdown.title }}</h2>
+    {% if dashboard.interactive %}<p class="chart-hint">Clique em uma fatia ou na legenda para filtrar</p>{% endif %}
+    <div class="chart-canvas-wrap"><canvas id="chart-doughnut"></canvas></div>
+  </div>
+  {% endif %}
+</section>
+
+{% if dashboard.numeric_summary %}
+<section class="table-card">
+  <h2>Resumo das colunas numéricas</h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Coluna</th><th>Soma</th><th>Média</th><th>Mínimo</th><th>Máximo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in dashboard.numeric_summary %}
+        <tr data-col="{{ row.column }}">
+          <td>{{ row.column }}</td>
+          <td class="num" data-field="sum">{{ row.sum }}</td>
+          <td class="num" data-field="mean">{{ row.mean }}</td>
+          <td class="num" data-field="min">{{ row.min }}</td>
+          <td class="num" data-field="max">{{ row.max }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section class="table-card">
+  <h2>Amostra dos dados</h2>
+  <p class="chart-hint">Primeiras linhas do arquivo original — esta tabela não muda com o filtro.</p>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>{% for col in dashboard.preview_columns %}<th>{{ col }}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for row in dashboard.preview_rows %}
+        <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script id="dashboard-data" type="application/json">
+{
+  "time_series": {{ dashboard.time_series | tojson }},
+  "category_breakdown": {{ dashboard.category_breakdown | tojson }},
+  "interactive": {{ dashboard.interactive | tojson }},
+  "primary_numeric": {{ dashboard.primary_numeric | tojson }},
+  "primary_category": {{ dashboard.primary_category | tojson }},
+  "has_date": {{ dashboard.has_date | tojson }},
+  "numeric_columns": {{ dashboard.numeric_columns | tojson }},
+  "records": {{ dashboard.records | tojson }}
+}
+</script>
+
+<script>
+(function () {
+  const data = JSON.parse(document.getElementById("dashboard-data").textContent);
+
+  // Paleta categórica validada (ordem fixa — não trocar por gráfico)
+  const PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
+  const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches
+    && document.documentElement.getAttribute("data-theme") !== "light";
+  const textColor = isDark ? "#c3c2b7" : "#52514e";
+  const gridColor = isDark ? "#2c2c2a" : "#e1e0d9";
+
+  Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+  Chart.defaults.color = textColor;
+
+  // ---------------------------------------------------------------------
+  // Formatação pt-BR (mesma regra usada no backend)
+  // ---------------------------------------------------------------------
+  const fmtNumber = (v) => (v === null || v === undefined || Number.isNaN(v))
+    ? "-"
+    : v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtInt = (v) => v.toLocaleString("pt-BR");
+  const fmtDateBR = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
+  const hexToRgba = (hex, alpha) => {
+    const n = parseInt(hex.replace("#", ""), 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+  };
+
+  let timeSeriesChart = null;
+  let barChart = null;
+  let doughnutChart = null;
+
+  if (data.time_series) {
+    timeSeriesChart = new Chart(document.getElementById("chart-timeseries"), {
+      type: "line",
+      data: {
+        labels: data.time_series.labels,
+        datasets: [{
+          label: data.time_series.title,
+          data: data.time_series.values,
+          borderColor: PALETTE[0],
+          backgroundColor: PALETTE[0] + "22",
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: PALETTE[0],
+          tension: 0.25,
+          fill: true,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: gridColor }, ticks: { color: textColor } },
+          y: { grid: { color: gridColor }, ticks: { color: textColor }, beginAtZero: true },
+        },
+      },
+    });
+  }
+
+  if (data.category_breakdown) {
+    const labels = data.category_breakdown.labels;
+    const baseColors = labels.map((_, i) => PALETTE[i % PALETTE.length]);
+
+    barChart = new Chart(document.getElementById("chart-bar"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{ data: data.category_breakdown.values, backgroundColor: [...baseColors], borderRadius: 4 }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textColor } },
+          y: { grid: { color: gridColor }, ticks: { color: textColor }, beginAtZero: true },
+        },
+        onClick: (evt, elements) => {
+          if (elements.length) toggleCategory(elements[0].index);
+        },
+      },
+    });
+
+    doughnutChart = new Chart(document.getElementById("chart-doughnut"), {
+      type: "doughnut",
+      data: {
+        labels,
+        datasets: [{
+          data: data.category_breakdown.values,
+          backgroundColor: [...baseColors],
+          borderWidth: 2,
+          borderColor: isDark ? "#1a1a19" : "#fcfcfb",
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { color: textColor, boxWidth: 14 },
+            onClick: (evt, legendItem) => toggleCategory(legendItem.index),
+          },
+        },
+        onClick: (evt, elements) => {
+          if (elements.length) toggleCategory(elements[0].index);
+        },
+      },
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Filtro interativo: clicar numa barra/fatia/legenda filtra o dashboard
+  // inteiro (KPIs, série temporal e tabela de resumo). Os próprios gráficos
+  // de categoria continuam mostrando todas as categorias — eles são o
+  // "controle" do filtro, não o resultado dele — só destacamos a fatia ativa.
+  // ---------------------------------------------------------------------
+  if (!data.interactive || !data.category_breakdown) return;
+
+  const categoryLabels = data.category_breakdown.labels;
+  const outrosIndex = categoryLabels.indexOf("Outros");
+  const topCategories = outrosIndex === -1 ? categoryLabels : categoryLabels.slice(0, outrosIndex);
+  const records = data.records;
+  const numericColumns = data.numeric_columns || [];
+
+  let activeCategory = null; // string | "__OUTROS__" | null
+
+  const banner = document.getElementById("filter-banner");
+  const bannerValue = document.getElementById("filter-banner-value");
+  const clearBtn = document.getElementById("filter-clear");
+
+  function matchesFilter(rec) {
+    if (activeCategory === null) return true;
+    if (activeCategory === "__OUTROS__") return !topCategories.includes(rec.category);
+    return rec.category === activeCategory;
+  }
+
+  function toggleCategory(index) {
+    const label = categoryLabels[index];
+    const value = label === "Outros" ? "__OUTROS__" : label;
+    activeCategory = activeCategory === value ? null : value;
+    recompute();
+  }
+
+  function setKpi(key, text) {
+    const el = document.querySelector(`.kpi-card[data-kpi="${key}"] .kpi-value`);
+    if (el) el.textContent = text;
+  }
+
+  function setNumericCell(col, field, text) {
+    document.querySelectorAll("tr[data-col]").forEach((tr) => {
+      if (tr.dataset.col === col) {
+        const cell = tr.querySelector(`td[data-field="${field}"]`);
+        if (cell) cell.textContent = text;
+      }
+    });
+  }
+
+  function recompute() {
+    const rows = records.filter(matchesFilter);
+
+    setKpi("total", fmtInt(rows.length));
+
+    if (data.primary_numeric) {
+      const vals = rows.map((r) => r.numeric[data.primary_numeric]).filter((v) => v !== null && v !== undefined);
+      if (vals.length) {
+        const sum = vals.reduce((a, b) => a + b, 0);
+        setKpi("sum", fmtNumber(sum));
+        setKpi("mean", fmtNumber(sum / vals.length));
+        setKpi("max", fmtNumber(Math.max(...vals)));
+      } else {
+        setKpi("sum", "-"); setKpi("mean", "-"); setKpi("max", "-");
+      }
+    }
+
+    if (data.has_date) {
+      const dates = rows.map((r) => r.date).filter(Boolean).sort();
+      if (dates.length) setKpi("period", `${fmtDateBR(dates[0])} – ${fmtDateBR(dates[dates.length - 1])}`);
+    }
+
+    if (timeSeriesChart) {
+      const labelsOrder = data.time_series.labels;
+      const sums = Object.fromEntries(labelsOrder.map((l) => [l, 0]));
+      for (const r of rows) {
+        if (!r.bucket || !(r.bucket in sums)) continue;
+        const v = data.primary_numeric ? (r.numeric[data.primary_numeric] ?? 0) : 1;
+        sums[r.bucket] += v;
+      }
+      timeSeriesChart.data.datasets[0].data = labelsOrder.map((l) => Math.round(sums[l] * 100) / 100);
+      timeSeriesChart.update();
+    }
+
+    for (const col of numericColumns) {
+      const vals = rows.map((r) => r.numeric[col]).filter((v) => v !== null && v !== undefined);
+      if (vals.length) {
+        const sum = vals.reduce((a, b) => a + b, 0);
+        setNumericCell(col, "sum", fmtNumber(sum));
+        setNumericCell(col, "mean", fmtNumber(sum / vals.length));
+        setNumericCell(col, "min", fmtNumber(Math.min(...vals)));
+        setNumericCell(col, "max", fmtNumber(Math.max(...vals)));
+      } else {
+        ["sum", "mean", "min", "max"].forEach((f) => setNumericCell(col, f, "-"));
+      }
+    }
+
+    highlightCharts();
+    updateBanner();
+  }
+
+  function highlightCharts() {
+    const colors = categoryLabels.map((label, i) => {
+      const base = PALETTE[i % PALETTE.length];
+      if (activeCategory === null) return base;
+      const value = label === "Outros" ? "__OUTROS__" : label;
+      return value === activeCategory ? base : hexToRgba(base, 0.2);
+    });
+    if (barChart) { barChart.data.datasets[0].backgroundColor = colors; barChart.update(); }
+    if (doughnutChart) { doughnutChart.data.datasets[0].backgroundColor = colors; doughnutChart.update(); }
+  }
+
+  function updateBanner() {
+    if (!banner) return;
+    if (activeCategory === null) {
+      banner.hidden = true;
+    } else {
+      banner.hidden = false;
+      bannerValue.textContent = `${data.primary_category}: ${activeCategory === "__OUTROS__" ? "Outros" : activeCategory}`;
+    }
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => { activeCategory = null; recompute(); });
+  }
+})();
+</script>
+
+<script>
+// ---------------------------------------------------------------------------
+// Salvar dashboard em HTML: gera um arquivo .html 100% independente (CSS e
+// Chart.js embutidos), com o filtro clicável funcionando offline, sem
+// precisar do servidor rodando. Útil para mandar pro cliente por e-mail ou
+// deixar salvo como registro do período.
+// ---------------------------------------------------------------------------
+(function () {
+  const btn = document.getElementById("save-html-btn");
+  if (!btn) return;
+  const baseName = {{ filename | tojson }};
+
+  btn.addEventListener("click", async () => {
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Gerando arquivo...";
+    try {
+      const [cssText, chartJsText] = await Promise.all([
+        fetch("/static/css/style.css").then((r) => r.text()),
+        fetch("/static/js/chart.min.js").then((r) => r.text()),
+      ]);
+
+      const clone = document.documentElement.cloneNode(true);
+
+      // Remove ações que não fazem sentido num arquivo estático (o próprio
+      // botão de exportar, e o link para enviar outro arquivo).
+      const actionsWrap = clone.querySelector(".header-actions");
+      if (actionsWrap) {
+        const note = document.createElement("span");
+        note.className = "export-note";
+        note.textContent = "📄 Dashboard exportado";
+        actionsWrap.replaceWith(note);
+      }
+
+      // Embute o CSS no lugar do <link>
+      const linkEl = clone.querySelector('link[rel="stylesheet"]');
+      if (linkEl) {
+        const styleEl = document.createElement("style");
+        styleEl.textContent = cssText;
+        linkEl.replaceWith(styleEl);
+      }
+
+      // Embute o Chart.js no lugar do <script src="...">
+      const chartScriptEl = clone.querySelector('script[src="/static/js/chart.min.js"]');
+      if (chartScriptEl) {
+        const inlineScript = document.createElement("script");
+        inlineScript.textContent = chartJsText;
+        chartScriptEl.replaceWith(inlineScript);
+      }
+
+      const html = "<!doctype html>\n" + clone.outerHTML;
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (baseName || "dashboard").replace(/\.[^.]+$/, "") + "-dashboard.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Não foi possível gerar o arquivo HTML: " + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Enviar arquivo — {{ BRAND_NAME }}{% endblock %}
+
+{% block content %}
+<section class="upload-hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <span class="eyebrow">Análise automática de dados</span>
+  <h1>{{ BRAND_TAGLINE }}</h1>
+  <p class="subtitle">
+    Envie um arquivo <strong>.csv</strong>, <strong>.xlsx</strong>, <strong>.xls</strong> ou <strong>.pdf</strong>
+    com dados em formato de tabela. O sistema detecta automaticamente datas, valores numéricos e categorias,
+    e monta os gráficos e indicadores para você — sem configurar nada antes.
+  </p>
+
+  <ul class="trust-badges">
+    <li>🔒 Processamento local</li>
+    <li>⚡ Dashboard em segundos</li>
+    <li>📊 KPIs e gráficos automáticos</li>
+  </ul>
+
+  {% if error %}
+  <div class="alert alert-error" role="alert">⚠️ {{ error }}</div>
+  {% endif %}
+
+  <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data" class="dropzone-form">
+    <label for="file-input" class="dropzone" id="dropzone">
+      <input id="file-input" type="file" name="file" accept=".csv,.xlsx,.xls,.pdf" required>
+      <div class="dropzone-content">
+        <span class="dropzone-icon">📁</span>
+        <span class="dropzone-text" id="dropzone-text">Clique para escolher um arquivo ou arraste aqui</span>
+        <span class="dropzone-hint">CSV, XLSX, XLS ou PDF · até 20 MB</span>
+      </div>
+    </label>
+    <button type="submit" class="btn-primary" id="submit-btn">Gerar Dashboard</button>
+  </form>
+
+  <div id="loading" class="loading" hidden>
+    <div class="spinner"></div>
+    <span>Lendo o arquivo e montando o dashboard…</span>
+  </div>
+</section>
+{% endblock %}
+
+{% block head %}
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const input = document.getElementById("file-input");
+    const text = document.getElementById("dropzone-text");
+    const form = document.getElementById("upload-form");
+    const loading = document.getElementById("loading");
+    const submitBtn = document.getElementById("submit-btn");
+
+    input.addEventListener("change", () => {
+      if (input.files.length > 0) {
+        text.textContent = input.files[0].name;
+      }
+    });
+
+    form.addEventListener("submit", () => {
+      loading.hidden = false;
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Processando…";
+    });
+  });
+</script>
+{% endblock %}
