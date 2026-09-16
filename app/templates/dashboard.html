@@ -29,9 +29,16 @@
 {% endif %}
 
 {% if dashboard.interactive and dashboard.category_breakdown %}
-<div id="filter-banner" class="filter-banner" hidden>
-  <span>Filtrando por <strong id="filter-banner-value"></strong></span>
-  <button type="button" id="filter-clear">Limpar filtro ✕</button>
+<div class="filter-controls">
+  <span class="filter-icon" aria-hidden="true">▾</span>
+  <label for="filter-select" class="filter-label">Filtrar por {{ dashboard.primary_category }}:</label>
+  <select id="filter-select" class="filter-select">
+    <option value="">Todas as categorias</option>
+    {% for label in dashboard.category_breakdown.labels %}
+    <option value="{{ label }}">{{ label }}</option>
+    {% endfor %}
+  </select>
+  <button type="button" id="filter-clear" class="filter-clear-btn" disabled>Limpar filtro ✕</button>
 </div>
 {% endif %}
 
@@ -131,8 +138,9 @@
 
   // Paleta categórica validada (ordem fixa — não trocar por gráfico)
   const PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
-  const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-    && document.documentElement.getAttribute("data-theme") !== "light";
+  const pageTheme = document.documentElement.getAttribute("data-theme");
+  const isDark = pageTheme === "dark"
+    || (pageTheme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   const textColor = isDark ? "#c3c2b7" : "#52514e";
   const gridColor = isDark ? "#2c2c2a" : "#e1e0d9";
 
@@ -253,9 +261,11 @@
 
   let activeCategory = null; // string | "__OUTROS__" | null
 
-  const banner = document.getElementById("filter-banner");
-  const bannerValue = document.getElementById("filter-banner-value");
+  const selectEl = document.getElementById("filter-select");
   const clearBtn = document.getElementById("filter-clear");
+
+  const labelToValue = (label) => (label === "Outros" ? "__OUTROS__" : label);
+  const valueToLabel = (value) => (value === "__OUTROS__" ? "Outros" : value);
 
   function matchesFilter(rec) {
     if (activeCategory === null) return true;
@@ -264,9 +274,13 @@
   }
 
   function toggleCategory(index) {
-    const label = categoryLabels[index];
-    const value = label === "Outros" ? "__OUTROS__" : label;
+    const value = labelToValue(categoryLabels[index]);
     activeCategory = activeCategory === value ? null : value;
+    recompute();
+  }
+
+  function setCategory(value) {
+    activeCategory = value === "" ? null : labelToValue(value);
     recompute();
   }
 
@@ -332,7 +346,7 @@
     }
 
     highlightCharts();
-    updateBanner();
+    syncControls();
   }
 
   function highlightCharts() {
@@ -346,16 +360,14 @@
     if (doughnutChart) { doughnutChart.data.datasets[0].backgroundColor = colors; doughnutChart.update(); }
   }
 
-  function updateBanner() {
-    if (!banner) return;
-    if (activeCategory === null) {
-      banner.hidden = true;
-    } else {
-      banner.hidden = false;
-      bannerValue.textContent = `${data.primary_category}: ${activeCategory === "__OUTROS__" ? "Outros" : activeCategory}`;
-    }
+  function syncControls() {
+    if (selectEl) selectEl.value = activeCategory === null ? "" : valueToLabel(activeCategory);
+    if (clearBtn) clearBtn.disabled = activeCategory === null;
   }
 
+  if (selectEl) {
+    selectEl.addEventListener("change", () => setCategory(selectEl.value));
+  }
   if (clearBtn) {
     clearBtn.addEventListener("click", () => { activeCategory = null; recompute(); });
   }

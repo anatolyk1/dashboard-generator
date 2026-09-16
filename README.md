@@ -20,10 +20,13 @@ tabela de dados) — sem precisar configurar nada previamente.
    interativo**: clicar em uma barra, fatia da rosca ou item da legenda
    filtra o dashboard inteiro (KPIs, gráfico de série temporal e resumo
    numérico) inteiramente no navegador, sem voltar ao servidor — clicar de
-   novo na mesma categoria limpa o filtro, e há também um botão "Limpar
-   filtro". Os próprios gráficos de categoria continuam mostrando todas as
-   categorias (são o controle do filtro, não o resultado dele) — só a
-   fatia/barra selecionada fica em destaque.
+   novo na mesma categoria limpa o filtro. Além do clique, há também um
+   **menu suspenso** logo acima dos KPIs para escolher a categoria direto
+   (mais rápido quando há muitas categorias), com um botão "Limpar filtro" —
+   os dois jeitos de filtrar ficam sincronizados entre si. Os próprios
+   gráficos de categoria continuam mostrando todas as categorias (são o
+   controle do filtro, não o resultado dele) — só a fatia/barra selecionada
+   fica em destaque.
 6. No topo do dashboard há um botão **"Salvar dashboard em HTML"** — gera e
    baixa um arquivo `.html` único, com o CSS e o Chart.js já embutidos
    dentro do arquivo. Esse arquivo abre em qualquer navegador sem precisar
@@ -34,6 +37,12 @@ tabela de dados) — sem precisar configurar nada previamente.
 Se o arquivo não tiver data, ou não tiver categoria, o dashboard se adapta e
 mostra só o que faz sentido para aqueles dados (testado com arquivos
 somente numéricos, sem data, etc. — ver seção de testes abaixo).
+
+O dashboard sempre abre com o **tema escuro** — é fixo, não depende da
+configuração de claro/escuro do sistema operacional de quem estiver vendo
+(bom pra manter a identidade visual consistente ao apresentar/vender o
+sistema). Pra reverter isso, é só remover `data-theme="dark"` da tag
+`<html>` em `app/templates/base.html`.
 
 ## Estrutura do projeto
 
@@ -111,12 +120,19 @@ Antes da entrega, o fluxo completo foi testado com:
 - Arquivo com extensão não suportada e arquivo vazio — mensagens de erro claras, sem quebrar a aplicação.
 - Filtro interativo com clique em barra, fatia da rosca e legenda, em datasets com granularidade diária, semanal e mensal — os valores recalculados no navegador foram comparados numericamente com os valores originais (bateram exatamente) e o alternar/limpar filtro foi testado várias vezes em sequência.
 - Dataset com mais de 8 categorias — confirma o agrupamento em "Outros" e o filtro por ele.
-- Renderização visual (Playwright) em modo claro e escuro — sem erros de console.
+- Renderização visual (Playwright) simulando sistema operacional em modo
+  claro — confirmado que o dashboard força o tema escuro mesmo assim
+  (`data-theme="dark"` e cor de fundo escura), sem erros de console.
+- Filtro por menu suspenso (dropdown): selecionar uma categoria recalcula
+  KPIs, gráfico de série temporal e resumo numérico corretamente, o botão
+  "Limpar filtro" reativa/desativa junto com o estado do filtro, e o
+  dropdown fica sincronizado quando o filtro é ativado clicando direto no
+  gráfico (e vice-versa).
 - Exportação do dashboard em HTML: arquivo baixado, aberto direto do disco
   (`file://`, servidor desligado) em uma aba nova sem nenhum erro de
-  console, e com o filtro por clique testado e funcionando normalmente
-  dentro desse arquivo exportado (KPIs recalculados corretamente ao
-  filtrar e ao limpar o filtro).
+  console, com o tema escuro preservado e com o filtro (clique e dropdown)
+  testado e funcionando normalmente dentro desse arquivo exportado (KPIs
+  recalculados corretamente ao filtrar e ao limpar o filtro).
 
 ## Próximos passos sugeridos
 
