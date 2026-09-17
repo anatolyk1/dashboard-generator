@@ -73,8 +73,9 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
 
     start = time.perf_counter()
     try:
-        df = read_uploaded_file(file.filename, content)
+        df, reader_warnings = read_uploaded_file(file.filename, content)
         dashboard = analyze(df)
+        dashboard.warnings = reader_warnings + dashboard.warnings
     except FileReadError as exc:
         return templates.TemplateResponse(
             request, "upload.html", {"error": str(exc)}, status_code=400

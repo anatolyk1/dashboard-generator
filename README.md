@@ -9,6 +9,14 @@ tabela de dados) — sem precisar configurar nada previamente.
 
 1. O usuário abre a página e envia um arquivo.
 2. O backend (FastAPI) lê o arquivo com o leitor apropriado (`app/services/file_reader.py`).
+   Se o Excel tiver **várias abas**, o sistema decide o que fazer sozinho: se
+   os nomes das abas parecem meses/períodos (ex.: "JAN25", "FEV/25"), junta
+   todas em uma tabela só com uma coluna "Mês" (e ignora de propósito abas de
+   resumo/consolidado, pra não somar os mesmos valores duas vezes); se as
+   abas têm exatamente as mesmas colunas, junta todas com uma coluna "Aba"; se
+   não há um padrão seguro, usa a maior aba e avisa quais ficaram de fora. Em
+   todos os casos aparece um aviso no topo do dashboard explicando o que foi
+   feito.
 3. O motor de análise (`app/services/data_analyzer.py`) detecta sozinho:
    - qual coluna é **data** (aceita formatos brasileiros, dd/mm/aaaa etc.);
    - quais colunas são **numéricas** (inclusive valores como `R$ 1.234,56` ou `12,5%`);
@@ -133,6 +141,28 @@ Antes da entrega, o fluxo completo foi testado com:
   console, com o tema escuro preservado e com o filtro (clique e dropdown)
   testado e funcionando normalmente dentro desse arquivo exportado (KPIs
   recalculados corretamente ao filtrar e ao limpar o filtro).
+- Planilha real "bagunçada" (sem cabeçalho, várias tabelas soltas na mesma
+  aba, colunas misturando texto/número/data na mesma coluna) — corrigido um
+  erro (`expected string or bytes-like object, got 'float'`) que acontecia
+  ao tentar detectar colunas numéricas nesse tipo de arquivo; agora o motor
+  de análise trata valores ausentes de forma segura antes de qualquer
+  operação de texto/regex, então esses arquivos geram um dashboard (mesmo
+  que mais simples, já que faltam nomes de coluna) em vez de quebrar.
+- Excel real com 20 abas (uma por mês/período, ex. "JAN25"..."OUT25", mais
+  abas de resumo como "MENSAL 2025") — confirmado que o sistema junta
+  automaticamente só as abas de mês (ignorando as de resumo, pra não somar
+  valor em duplicidade) e avisa isso no dashboard. **Limitação conhecida**:
+  quando uma aba de mês mistura, na mesma coluna, valores do dia a dia com
+  linhas que já são um subtotal daquela própria aba (ex.: uma linha "TOTAL"
+  somando as linhas de cima, na mesma coluna) — comum em planilhas pessoais
+  desenhadas à mão — o motor de análise não tem como saber que aquela linha
+  é um subtotal, e os KPIs de Soma/Média acabam contando o valor "de novo".
+  Isso não é um bug de leitura (o arquivo é lido e combinado certinho); é uma
+  limitação de qualquer motor genérico de detecção de colunas diante de um
+  layout manual com sub-totais embutidos. Pra números 100% corretos nesse
+  tipo de arquivo seria preciso um leitor feito à mão pro layout específico
+  daquela planilha (reconhecendo as linhas "TOTAL"/"SALDO"/"GASTO" como
+  rótulos, não como dado).
 
 ## Próximos passos sugeridos
 
