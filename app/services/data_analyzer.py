@@ -16,6 +16,7 @@ o sistema tenta descobrir sozinho:
 from __future__ import annotations
 
 import re
+import warnings
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -58,6 +59,23 @@ class DashboardData:
     records: list[dict] = field(default_factory=list)
 
 
+def _safe_str_series(series: pd.Series) -> pd.Series:
+    """
+    Converte qualquer série para string, tratando valores ausentes (NaN/NaT/None)
+    como string vazia.
+
+    Isso existe porque planilhas "bagunçadas" (sem cabeçalho limpo, com tipos
+    misturados na mesma coluna — texto, número, data) geram colunas de dtype
+    "object" onde nem todo valor é string. Um simples `.astype(str)` deveria
+    bastar, mas em algumas versões do pandas ele não estringifica valores
+    ausentes de forma confiável quando a coluna tem tipos mistos — o NaN pode
+    "escapar" como float mesmo depois do `.astype(str)`, e quebra qualquer
+    operação de string (`.str.*` ou regex) que vier depois. Convertendo valor a
+    valor com `.map()` evitamos essa armadilha.
+    """
+    return series.map(lambda v: "" if pd.isna(v) else str(v)).astype(str).str.strip()
+
+
 def _try_parse_numeric(series: pd.Series) -> pd.Series | None:
     """
     Tenta converter uma coluna (possivelmente texto) em números.
@@ -69,16 +87,21 @@ def _try_parse_numeric(series: pd.Series) -> pd.Series | None:
         return series
 
     # pandas 3.x passou a usar um dtype "str" nativo (não mais "object") para
-    # colunas de texto por padrão — aceitamos os dois casos.
+    # colunas de texto por padrão — aceitamos os dois casos. Colunas com tipos
+    # totalmente misturados (ex.: planilha sem cabeçalho, com texto e número na
+    # mesma coluna) também caem em "object" e são tratadas abaixo.
     if not (pd.api.types.is_object_dtype(series) or pd.api.types.is_string_dtype(series)):
         return None
 
-    cleaned = series.astype(str).str.strip()
+    cleaned = _safe_str_series(series)
     non_empty = cleaned[cleaned.ne("") & cleaned.str.lower().ne("nan")]
     if non_empty.empty:
         return None
 
-    stripped = non_empty.apply(lambda v: _CURRENCY_CHARS.sub("", v))
+    # `isinstance(v, str)` é só uma segunda camada de proteção: a esta altura
+    # `non_empty` já vem só de `_safe_str_series`, mas preferimos nunca deixar
+    # um tipo inesperado chegar até uma regex.
+    stripped = non_empty.apply(lambda v: _CURRENCY_CHARS.sub("", v) if isinstance(v, str) else "")
 
     # Formato pt-BR: "1.234,56" -> "1234.56"
     def normalize(value: str) -> str:
@@ -101,7 +124,7 @@ def _try_parse_numeric(series: pd.Series) -> pd.Series | None:
         return None
 
     result = pd.to_numeric(
-        series.astype(str).str.strip().apply(lambda v: normalize(_CURRENCY_CHARS.sub("", v))),
+        _safe_str_series(series).apply(lambda v: normalize(_CURRENCY_CHARS.sub("", v)) if isinstance(v, str) else v),
         errors="coerce",
     )
     return result
@@ -118,7 +141,15 @@ def _try_parse_date(series: pd.Series, column_name: str) -> pd.Series | None:
     if sample.empty:
         return None
 
-    parsed = pd.to_datetime(series, errors="coerce", dayfirst=True)
+    # Planilhas "bagunçadas" (sem cabeçalho, formatos de data inconsistentes na
+    # mesma coluna) fazem o pandas cair no parser genérico do dateutil e emitir
+    # um UserWarning por coluna testada — inofensivo aqui, já que qualquer valor
+    # que não vira data cai em `errors="coerce"` (NaT) e a coluna só é aceita
+    # como "data" se a maioria dos valores realmente converter (ver `threshold`
+    # abaixo). Sem isso, arquivos assim enchem o log do servidor de avisos.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        parsed = pd.to_datetime(series, errors="coerce", dayfirst=True)
     success_rate = parsed.notna().sum() / max(series.notna().sum(), 1)
 
     name_hints_date = any(k in column_name.lower() for k in _DATE_KEYWORDS)
