@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Privacidade — {{ BRAND_NAME }}{% endblock %}
+
+{% block content %}
+<section class="doc-page">
+  <h1>Privacidade e tratamento dos arquivos</h1>
+
+  <h2>O que acontece com o seu arquivo</h2>
+  <p>
+    O arquivo que você envia é lido e analisado <strong>na memória do servidor</strong> apenas o tempo necessário
+    para montar o dashboard. Ele <strong>não é gravado em disco, não é salvo em banco de dados e não é compartilhado
+    com terceiros</strong>. Depois que o dashboard é exibido, o servidor não guarda cópia do conteúdo.
+  </p>
+
+  <h2>O dashboard e o botão “Salvar em HTML”</h2>
+  <p>
+    O dashboard existe apenas na sua tela. Ao salvar em HTML, o arquivo é gerado no seu próprio navegador e baixado
+    para o seu computador — ele contém os dados do seu arquivo, então guarde e compartilhe com o mesmo cuidado.
+  </p>
+
+  <h2>Dados técnicos</h2>
+  <p>
+    Como qualquer site, o provedor de hospedagem registra dados técnicos de acesso (endereço IP, data e hora e
+    endereço acessado) por segurança e para evitar abuso. Esses registros <strong>não incluem o conteúdo dos
+    arquivos</strong>. O sistema usa um único cookie, necessário para manter o seu acesso liberado após digitar o
+    código de licença.
+  </p>
+
+  <h2>Boas práticas</h2>
+  <p>
+    Evite enviar documentos com dados sensíveis de terceiros (como CPF, dados de saúde ou senhas) se não for
+    necessário para a análise. Se precisar tratar dados pessoais de outras pessoas, você continua sendo o responsável
+    por esses dados perante a LGPD.
+  </p>
+
+  {% if SUPPORT_EMAIL %}
+  <h2>Contato</h2>
+  <p>Dúvidas sobre privacidade: <a href="mailto:{{ SUPPORT_EMAIL }}">{{ SUPPORT_EMAIL }}</a>.</p>
+  {% endif %}
+
+  <p><a href="/">← Voltar</a></p>
+</section>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Acesso — {{ BRAND_NAME }}{% endblock %}
+
+{% block content %}
+<section class="upload-hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <span class="eyebrow">Acesso exclusivo</span>
+  <h1>Digite seu código de licença</h1>
+  <p class="subtitle">
+    O código foi enviado após a compra. Ele libera o uso do {{ BRAND_NAME }} neste navegador por 30 dias.
+  </p>
+
+  {% if error %}
+  <div class="alert alert-error" role="alert">⚠️ {{ error }}</div>
+  {% endif %}
+
+  <form action="/acesso" method="post" class="dropzone-form">
+    <input type="text" name="code" class="license-input" placeholder="GDP-XXXX-XXXX-XXXX-XXXX"
+           autocomplete="off" autocapitalize="characters" spellcheck="false" required autofocus>
+    <button type="submit" class="btn-primary">Entrar</button>
+  </form>
+
+  <p class="subtitle small">
+    {% if PURCHASE_URL %}Ainda não tem? <a href="{{ PURCHASE_URL }}" rel="noopener">Comprar acesso</a> · {% endif %}
+    {% if SUPPORT_EMAIL %}Problemas com o código? <a href="mailto:{{ SUPPORT_EMAIL }}">{{ SUPPORT_EMAIL }}</a> · {% endif %}
+    <a href="/privacidade">Privacidade</a>
+  </p>
+</section>
+{% endblock %}

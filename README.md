@@ -90,6 +90,51 @@ Depois abra **http://localhost:8000** no navegador e envie um dos arquivos
 de `sample_data/` para ver o dashboard funcionando (ou use seus próprios
 dados).
 
+## Colocar no ar e vender (Railway + licença por código)
+
+O sistema já vem pronto para produção: `Dockerfile`, `railway.json`, controle
+de acesso por código de licença, limite de uso por IP, validação do conteúdo
+dos arquivos, cabeçalhos de segurança e página de privacidade (`/privacidade`).
+
+### 1. Variáveis de ambiente (Railway → Variables)
+
+| Variável | Valor | Para quê |
+|---|---|---|
+| `SECRET_KEY` | texto longo e aleatório (mín. 16 caracteres) | assina os códigos de licença e o cookie. **Guarde e nunca mude** — se mudar, os códigos já vendidos deixam de valer |
+| `LICENSE_REQUIRED` | `true` | exige código de licença para usar |
+| `PURCHASE_URL` | link da página do produto na Hotmart | aparece na tela de acesso |
+| `SUPPORT_EMAIL` | seu e-mail de suporte | aparece na tela de acesso e na privacidade |
+| `REVOKED_CODES` | `GDP-...,GDP-...` (opcional) | códigos cancelados/reembolsados |
+| `BRAND_NAME` | opcional | muda o nome do produto sem mexer no código |
+
+Para gerar uma `SECRET_KEY`: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`
+
+### 2. Gerar os códigos de licença
+
+```bash
+SECRET_KEY="a-mesma-chave-do-railway" python3 scripts/gerar_codigos.py 20
+```
+
+Cada linha é um código único (`GDP-XXXX-XXXX-XXXX-XXXX`). Cole os códigos na
+área de membros / mensagem de entrega do produto na Hotmart (um por comprador).
+Reembolsou alguém? Coloque o código dele em `REVOKED_CODES` e salve — o acesso
+cai na próxima requisição, sem banco de dados.
+
+### 3. Deploy
+
+1. Suba o código para o GitHub (já feito para este repositório).
+2. No Railway: **New Project → Deploy from GitHub repo** → escolha `dashboard-generator`.
+3. Preencha as variáveis acima.
+4. Em **Settings → Networking → Generate Domain** (ou conecte seu domínio próprio).
+5. O Railway usa o `Dockerfile` e o healthcheck `/health` automaticamente.
+
+### Limites e observações
+
+- Limites padrão por IP: 10 uploads/min e 8 tentativas de código/min (ajustáveis por `RATE_LIMIT_UPLOADS_PER_MIN` e `RATE_LIMIT_ACCESS_PER_MIN`).
+- Os arquivos enviados são processados em memória e **não** são gravados; o texto de `/privacidade` descreve isso. Revise esse texto (idealmente com orientação jurídica/LGPD) antes de vender.
+- O limite por IP fica na memória do processo: rode **1 instância** (padrão do Railway). Para escalar para várias, troque por Redis.
+- Os códigos são validados por assinatura, então não há “painel” de clientes. Se quiser emissão automática de código por compra (webhook da Hotmart) ou login com e-mail/senha, o próximo passo é adicionar um banco (ex.: Supabase).
+
 ## Reskinar para vender a um cliente (white-label)
 
 O visual foi separado do código pra você poder entregar isso pra diferentes

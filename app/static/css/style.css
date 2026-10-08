@@ -399,3 +399,26 @@ th, td {
 th { color: var(--text-muted); font-weight: 600; }
 tbody tr:hover { background: color-mix(in srgb, var(--brand-1) 4%, transparent); }
 td.num { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* ==========================================================================
+   Produção: tela de acesso e página de texto (privacidade)
+   ========================================================================== */
+.license-input {
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+  letter-spacing: 0.08em;
+  font-size: 1.05rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+.license-input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.subtitle.small { font-size: 0.85rem; margin-top: 18px; }
+.subtitle.small a, .footer a { color: var(--accent); }
+.doc-page { max-width: 720px; margin: 0 auto; line-height: 1.65; color: var(--text-secondary); }
+.doc-page h1 { color: var(--text-primary); font-size: 1.6rem; margin-bottom: 8px; }
+.doc-page h2 { color: var(--text-primary); font-size: 1.05rem; margin: 26px 0 6px; }

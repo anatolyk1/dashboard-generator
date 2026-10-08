@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Enviar arquivo — {{ BRAND_NAME }}{% endblock %}
 
+{% block header_action %}
+{% if show_logout %}<div class="header-actions"><a href="/sair" class="btn-ghost">Sair</a></div>{% endif %}
+{% endblock %}
+
 {% block content %}
 <section class="upload-hero">
   <div class="hero-glow" aria-hidden="true"></div>
@@ -13,7 +17,7 @@
   </p>
 
   <ul class="trust-badges">
-    <li>🔒 Processamento local</li>
+    <li>🔒 Arquivos não são armazenados</li>
     <li>⚡ Dashboard em segundos</li>
     <li>📊 KPIs e gráficos automáticos</li>
   </ul>
