@@ -12,6 +12,7 @@ Para rodar localmente:
 """
 from __future__ import annotations
 
+import asyncio
 import secrets
 import time
 
@@ -19,6 +20,7 @@ from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.config import (
@@ -27,6 +29,8 @@ from app.core.config import (
     BRAND_NAME,
     BRAND_TAGLINE,
     LICENSE_REQUIRED,
+    MAX_CONCURRENT_JOBS,
+    MAX_UPLOAD_MB,
     MAX_UPLOAD_SIZE,
     PURCHASE_URL,
     RATE_LIMIT_ACCESS_PER_MIN,
@@ -60,8 +64,13 @@ templates.env.globals["BRAND_TAGLINE"] = BRAND_TAGLINE
 templates.env.globals["PURCHASE_URL"] = PURCHASE_URL
 templates.env.globals["SUPPORT_EMAIL"] = SUPPORT_EMAIL
 templates.env.globals["LICENSE_REQUIRED"] = LICENSE_REQUIRED
+templates.env.globals["MAX_UPLOAD_MB"] = MAX_UPLOAD_MB
 
 limiter = RateLimiter(window_seconds=60)
+
+# Quantas análises pesadas rodam ao mesmo tempo (as demais esperam na fila).
+# Protege a memória do servidor quando várias pessoas enviam arquivos grandes juntas.
+_job_slots = asyncio.Semaphore(MAX_CONCURRENT_JOBS)
 
 # Rotas que não pedem licença (o resto pede quando LICENSE_REQUIRED=true).
 _PUBLIC_PATHS = {"/health", "/acesso", "/sair", "/privacidade"}
@@ -173,7 +182,7 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
     content = await file.read(MAX_UPLOAD_SIZE + 1)
 
     if len(content) > MAX_UPLOAD_SIZE:
-        return _upload_error(request, f"Arquivo muito grande. O limite é {MAX_UPLOAD_SIZE // (1024 * 1024)} MB.", 413)
+        return _upload_error(request, f"Arquivo muito grande. O limite é {MAX_UPLOAD_MB} MB.", 413)
 
     content_error = validate_file_content(ext, content)
     if content_error:
@@ -181,8 +190,11 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
 
     start = time.perf_counter()
     try:
-        df, reader_warnings = read_uploaded_file(filename, content)
-        dashboard = analyze(df)
+        # A leitura/análise é pesada (CPU): roda em outra thread para o servidor
+        # continuar respondendo (healthcheck, outras pessoas) durante arquivos grandes.
+        async with _job_slots:
+            df, reader_warnings = await run_in_threadpool(read_uploaded_file, filename, content)
+            dashboard = await run_in_threadpool(analyze, df)
         dashboard.warnings = reader_warnings + dashboard.warnings
     except FileReadError as exc:
         return _upload_error(request, str(exc))

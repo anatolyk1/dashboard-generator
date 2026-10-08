@@ -157,7 +157,7 @@ Nenhum outro arquivo precisa mudar pra trocar a cara do sistema.
 | `.xlsx` / `.xls` | `pandas.read_excel` |
 | `.pdf` | `pdfplumber` extrai todas as tabelas do PDF e usa a maior encontrada |
 
-Limite de upload: 20 MB (ajustável em `app/core/config.py`).
+Limite de upload: 60 MB por padrão (ajustável pela variável `MAX_UPLOAD_MB`; no Railway basta mudar em Variables). Em testes, um Excel de 13 MB com 450 mil linhas levou ~35 s e ~450 MB de RAM — arquivos maiores demoram e usam mais memória, então dimensione o plano do servidor conforme o limite escolhido.
 
 Acima de 20.000 linhas (`MAX_INTERACTIVE_ROWS` em `app/core/config.py`), o
 filtro por clique é desativado automaticamente (com um aviso no dashboard)

@@ -9,8 +9,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Extensões de arquivo aceitas no upload
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls", ".pdf"}
 
-# Tamanho máximo de upload (em bytes) — 20 MB
-MAX_UPLOAD_SIZE = 20 * 1024 * 1024
+# Tamanho máximo de upload — padrão 60 MB; ajustável pela variável MAX_UPLOAD_MB
+# (no Railway, basta mudar em Variables). Arquivos maiores usam mais memória e
+# demoram mais para processar: um Excel de ~13 MB (450 mil linhas) leva ~35 s e
+# ~450 MB de RAM; um de ~50 MB leva alguns minutos e alguns GB.
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "60"))
+MAX_UPLOAD_SIZE = MAX_UPLOAD_MB * 1024 * 1024
 
 # Quantas linhas mostrar na tabela de pré-visualização do dashboard
 PREVIEW_ROWS = 15
@@ -61,8 +65,13 @@ RATE_LIMIT_UPLOADS_PER_MIN = int(os.getenv("RATE_LIMIT_UPLOADS_PER_MIN", "10"))
 RATE_LIMIT_ACCESS_PER_MIN = int(os.getenv("RATE_LIMIT_ACCESS_PER_MIN", "8"))
 
 # Proteção contra .xlsx "bomba" (zip pequeno que descompacta em gigabytes).
-MAX_UNCOMPRESSED_SIZE = 200 * 1024 * 1024
+# Um Excel legítimo costuma descompactar ~10x; o padrão cobre arquivos de ~60 MB.
+MAX_UNCOMPRESSED_SIZE = int(os.getenv("MAX_UNCOMPRESSED_MB", "1500")) * 1024 * 1024
 
 # Link de compra mostrado na tela de acesso (ex.: página do produto na Hotmart).
 PURCHASE_URL = os.getenv("PURCHASE_URL", "")
 SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "")
+
+# Quantas análises de arquivo rodam ao mesmo tempo (as outras esperam na fila).
+# Cada arquivo grande pode usar ~1 GB de RAM; aumente só se o plano tiver memória sobrando.
+MAX_CONCURRENT_JOBS = int(os.getenv("MAX_CONCURRENT_JOBS", "2"))
